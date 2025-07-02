@@ -19,6 +19,8 @@ import { useToast } from "@/hooks/use-toast"
 export function AccountDropdown() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [cartCount, setCartCount] = useState(0)
+  const [wishlistCount, setWishlistCount] = useState(0)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -36,8 +38,29 @@ export function AccountDropdown() {
       setLoading(false)
     })
 
-    return () => subscription.unsubscribe()
+    // Load cart and wishlist counts
+    updateCounts()
+
+    // Listen for cart and wishlist updates
+    const handleCartUpdate = () => updateCounts()
+    const handleWishlistUpdate = () => updateCounts()
+
+    window.addEventListener("cartUpdated", handleCartUpdate)
+    window.addEventListener("wishlistUpdated", handleWishlistUpdate)
+
+    return () => {
+      subscription.unsubscribe()
+      window.removeEventListener("cartUpdated", handleCartUpdate)
+      window.removeEventListener("wishlistUpdated", handleWishlistUpdate)
+    }
   }, [])
+
+  const updateCounts = () => {
+    const cart = JSON.parse(localStorage.getItem("cart") || "[]")
+    const wishlist = JSON.parse(localStorage.getItem("wishlist") || "[]")
+    setCartCount(cart.length)
+    setWishlistCount(wishlist.length)
+  }
 
   const handleSignOut = async () => {
     try {
@@ -53,6 +76,11 @@ export function AccountDropdown() {
           title: "Signed Out",
           description: "You have been successfully signed out.",
         })
+        // Clear local storage
+        localStorage.removeItem("cart")
+        localStorage.removeItem("wishlist")
+        window.dispatchEvent(new Event("cartUpdated"))
+        window.dispatchEvent(new Event("wishlistUpdated"))
       }
     } catch (error) {
       toast({
@@ -115,9 +143,9 @@ export function AccountDropdown() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href="/account/profile" className="cursor-pointer">
+          <Link href="/account" className="cursor-pointer">
             <Settings className="mr-2 h-4 w-4" />
-            <span>Profile Settings</span>
+            <span>My Account</span>
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
@@ -129,7 +157,7 @@ export function AccountDropdown() {
         <DropdownMenuItem asChild>
           <Link href="/account/wishlist" className="cursor-pointer">
             <Heart className="mr-2 h-4 w-4" />
-            <span>Wishlist</span>
+            <span>Wishlist ({wishlistCount})</span>
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />

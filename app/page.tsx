@@ -1,3 +1,8 @@
+"use client"
+
+import type React from "react"
+
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import {
@@ -20,6 +25,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { AccountDropdown } from "@/components/account/account-dropdown"
 import { supabase } from "@/lib/supabase"
+import { useToast } from "@/hooks/use-toast"
 
 async function getFeaturedProducts() {
   const { data: products, error } = await supabase
@@ -95,12 +101,112 @@ async function getProductsByCategory() {
   return productsByCategory
 }
 
-export default async function HomePage() {
-  const [featuredProducts, categories, productsByCategory] = await Promise.all([
-    getFeaturedProducts(),
-    getCategories(),
-    getProductsByCategory(),
-  ])
+export default function HomePage() {
+  const [featuredProducts, setFeaturedProducts] = useState([])
+  const [categories, setCategories] = useState([])
+  const [productsByCategory, setProductsByCategory] = useState({})
+  const [cartCount, setCartCount] = useState(0)
+  const [wishlistCount, setWishlistCount] = useState(0)
+  const [searchQuery, setSearchQuery] = useState("")
+  const { toast } = useToast()
+
+  useEffect(() => {
+    loadData()
+    updateCounts()
+
+    // Listen for cart and wishlist updates
+    const handleCartUpdate = () => updateCounts()
+    const handleWishlistUpdate = () => updateCounts()
+
+    window.addEventListener("cartUpdated", handleCartUpdate)
+    window.addEventListener("wishlistUpdated", handleWishlistUpdate)
+
+    return () => {
+      window.removeEventListener("cartUpdated", handleCartUpdate)
+      window.removeEventListener("wishlistUpdated", handleWishlistUpdate)
+    }
+  }, [])
+
+  const loadData = async () => {
+    const [featured, cats, productsByCat] = await Promise.all([
+      getFeaturedProducts(),
+      getCategories(),
+      getProductsByCategory(),
+    ])
+    setFeaturedProducts(featured)
+    setCategories(cats)
+    setProductsByCategory(productsByCat)
+  }
+
+  const updateCounts = () => {
+    const cart = JSON.parse(localStorage.getItem("cart") || "[]")
+    const wishlist = JSON.parse(localStorage.getItem("wishlist") || "[]")
+    setCartCount(cart.length)
+    setWishlistCount(wishlist.length)
+  }
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (searchQuery.trim()) {
+      window.location.href = `/products?search=${encodeURIComponent(searchQuery.trim())}`
+    }
+  }
+
+  const handleAddToCart = (product: any) => {
+    const existingCart = JSON.parse(localStorage.getItem("cart") || "[]")
+    const existingItemIndex = existingCart.findIndex((item: any) => item.id === product.id)
+
+    if (existingItemIndex > -1) {
+      existingCart[existingItemIndex].quantity += 1
+    } else {
+      existingCart.push({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        image: product.images[0],
+        quantity: 1,
+        slug: product.slug,
+      })
+    }
+
+    localStorage.setItem("cart", JSON.stringify(existingCart))
+    window.dispatchEvent(new Event("cartUpdated"))
+
+    toast({
+      title: "Added to Cart",
+      description: `${product.name} has been added to your cart.`,
+    })
+  }
+
+  const handleAddToWishlist = (product: any) => {
+    const existingWishlist = JSON.parse(localStorage.getItem("wishlist") || "[]")
+    const isAlreadyInWishlist = existingWishlist.some((item: any) => item.id === product.id)
+
+    if (isAlreadyInWishlist) {
+      toast({
+        title: "Already in Wishlist",
+        description: `${product.name} is already in your wishlist.`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    existingWishlist.push({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      image: product.images[0],
+      slug: product.slug,
+    })
+
+    localStorage.setItem("wishlist", JSON.stringify(existingWishlist))
+    window.dispatchEvent(new Event("wishlistUpdated"))
+
+    toast({
+      title: "Added to Wishlist",
+      description: `${product.name} has been added to your wishlist.`,
+    })
+  }
 
   const categoryIcons: Record<string, any> = {
     refrigerators: Refrigerator,
@@ -112,31 +218,30 @@ export default async function HomePage() {
   }
 
   const ProductCard = ({ product }: { product: any }) => (
-    <Link
-      href={`/products/${product.slug}`}
-      className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg hover:border-blue-200 transition-all duration-300 group w-full"
-    >
-      <div className="relative p-3 sm:p-4 bg-gradient-to-br from-gray-50 to-gray-100">
-        {product.original_price && product.original_price > product.price && (
-          <Badge className="absolute top-2 left-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md z-10 px-2 py-1 text-xs">
-            {Math.round(((product.original_price - product.price) / product.original_price) * 100)}% Off
-          </Badge>
-        )}
-        {product.stock_quantity <= 5 && product.stock_quantity > 0 && (
-          <Badge className="absolute top-2 right-2 bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-md z-10 px-2 py-1 text-xs">
-            Low Stock
-          </Badge>
-        )}
-        <div className="aspect-square flex items-center justify-center">
-          <Image
-            src={product.images?.[0] || "/placeholder.svg?height=200&width=200"}
-            alt={product.name}
-            width={200}
-            height={200}
-            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
-          />
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg hover:border-blue-200 transition-all duration-300 group w-full">
+      <Link href={`/products/${product.slug}`} className="block">
+        <div className="relative p-3 sm:p-4 bg-gradient-to-br from-gray-50 to-gray-100">
+          {product.original_price && product.original_price > product.price && (
+            <Badge className="absolute top-2 left-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md z-10 px-2 py-1 text-xs">
+              {Math.round(((product.original_price - product.price) / product.original_price) * 100)}% Off
+            </Badge>
+          )}
+          {product.stock_quantity <= 5 && product.stock_quantity > 0 && (
+            <Badge className="absolute top-2 right-2 bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-md z-10 px-2 py-1 text-xs">
+              Low Stock
+            </Badge>
+          )}
+          <div className="aspect-square flex items-center justify-center">
+            <Image
+              src={product.images?.[0] || "/placeholder.svg?height=200&width=200"}
+              alt={product.name}
+              width={200}
+              height={200}
+              className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+            />
+          </div>
         </div>
-      </div>
+      </Link>
       <div className="p-3 sm:p-4 lg:p-5">
         <div className="flex items-center space-x-1 mb-2">
           {[1, 2, 3, 4, 5].map((star) => (
@@ -144,14 +249,18 @@ export default async function HomePage() {
           ))}
           <span className="text-xs text-gray-500 ml-1">(4.5)</span>
         </div>
-        <h3 className="font-semibold text-gray-900 mb-2 text-sm sm:text-base line-clamp-2 group-hover:text-blue-600 transition-colors">
-          {product.name}
-        </h3>
+        <Link href={`/products/${product.slug}`}>
+          <h3 className="font-semibold text-gray-900 mb-2 text-sm sm:text-base line-clamp-2 group-hover:text-blue-600 transition-colors">
+            {product.name}
+          </h3>
+        </Link>
         <div className="flex flex-col space-y-1 mb-3">
           <div className="flex items-center space-x-2">
-            <span className="font-bold text-lg sm:text-xl text-gray-900">৳{product.price}</span>
+            <span className="font-bold text-lg sm:text-xl text-gray-900">৳{product.price.toLocaleString()}</span>
             {product.original_price && product.original_price > product.price && (
-              <span className="text-sm sm:text-base text-gray-500 line-through">৳{product.original_price}</span>
+              <span className="text-sm sm:text-base text-gray-500 line-through">
+                ৳{product.original_price.toLocaleString()}
+              </span>
             )}
           </div>
           <p className="text-xs text-gray-600">{product.brands?.name}</p>
@@ -159,41 +268,50 @@ export default async function HomePage() {
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center space-x-1 sm:space-x-2 min-w-0 flex-1"></div>
           <div className="flex items-center space-x-1 flex-shrink-0">
-            <Button size="sm" variant="ghost" className="p-1.5 sm:p-2 hover:bg-blue-50 rounded-lg">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="p-1.5 sm:p-2 hover:bg-red-50 rounded-lg"
+              onClick={(e) => {
+                e.preventDefault()
+                handleAddToWishlist(product)
+              }}
+            >
               <Heart className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 hover:text-red-500" />
             </Button>
             <Button
               size="sm"
               className="bg-blue-600 hover:bg-blue-700 text-white px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg"
+              onClick={(e) => {
+                e.preventDefault()
+                handleAddToCart(product)
+              }}
             >
               <ShoppingCart className="w-3 h-3 sm:w-4 sm:h-4" />
             </Button>
           </div>
         </div>
       </div>
-    </Link>
+    </div>
   )
 
   return (
     <div className="min-h-screen bg-white">
       {/* Enhanced Header with Larger Logo and Account Menu */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between h-20 sm:h-24 lg:h-28 max-w-full">
+        <div className="container mx-auto px-4 max-w-7xl">
+          <div className="flex items-center justify-between h-20 sm:h-24 lg:h-28">
             {/* Logo and Navigation */}
             <div className="flex items-center space-x-4 lg:space-x-8 min-w-0">
               <Link href="/" className="flex items-center group flex-shrink-0">
-                <Image
-                  src="https://sjc.microlink.io/wF7U_5sWGJcxTWuj1a7z41-UHrQuxeWo174RRJGTufFAzFKHnrzRAs0bT29MJ2Pvso-VlamrTvUV40KpcvMcfQ.jpeg"
+                <img
+                  src="https://i.ibb.co/NdT015WL/Chat-GPT-Image-Jun-30-2025-09-40-05-PM-removebg-preview.png"
                   alt="MD Electronics"
-                  width={450}
-                  height={110}
-                  className="h-16 sm:h-20 lg:h-24 w-auto max-w-[200px] sm:max-w-[250px] lg:max-w-[300px] group-hover:scale-105 transition-transform duration-300"
-                  priority
+                  className="h-16 sm:h-20 lg:h-24 w-auto group-hover:scale-105 transition-transform duration-300"
                 />
               </Link>
 
-              <nav className="hidden lg:flex space-x-6 xl:space-x-8">
+              <nav className="hidden lg:flex space-x-4 xl:space-x-6">
                 <Link href="/" className="text-blue-600 hover:text-blue-700 font-semibold relative">
                   Home
                   <div className="absolute -bottom-1 left-0 w-full h-0.5 bg-blue-600 rounded-full"></div>
@@ -204,7 +322,14 @@ export default async function HomePage() {
                 <Link href="/about" className="text-gray-600 hover:text-blue-600 font-medium transition-colors">
                   About
                 </Link>
-                <Link href="#footer" className="text-gray-600 hover:text-blue-600 font-medium transition-colors">
+                <Link
+                  href="#footer"
+                  className="text-gray-600 hover:text-blue-600 font-medium transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    document.querySelector("footer")?.scrollIntoView({ behavior: "smooth" })
+                  }}
+                >
                   Contact
                 </Link>
               </nav>
@@ -213,25 +338,34 @@ export default async function HomePage() {
             {/* Search and Actions */}
             <div className="flex items-center space-x-2 sm:space-x-4">
               {/* Compact Search Bar */}
-              <div className="relative hidden md:block">
+              <form onSubmit={handleSearch} className="relative hidden md:block">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
                   placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9 pr-3 py-2 w-48 lg:w-56 xl:w-64 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
-              </div>
+              </form>
 
               <div className="flex items-center space-x-1 sm:space-x-2">
-                <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl">
+                <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl relative">
                   <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-red-500 transition-colors" />
+                  {wishlistCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center font-medium">
+                      {wishlistCount}
+                    </span>
+                  )}
                 </Button>
 
-                <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl relative">
-                  <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-blue-600 transition-colors" />
-                  <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center font-medium">
-                    0
-                  </span>
-                </Button>
+                <Link href="/cart">
+                  <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl relative">
+                    <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-blue-600 transition-colors" />
+                    <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center font-medium">
+                      {cartCount}
+                    </span>
+                  </Button>
+                </Link>
 
                 {/* Account Dropdown */}
                 <AccountDropdown />
@@ -266,10 +400,12 @@ export default async function HomePage() {
                 prices
               </p>
               <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-6">
-                <Button className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center space-x-3">
-                  <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span className="font-semibold">Shop Now</span>
-                </Button>
+                <Link href="/products">
+                  <Button className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center space-x-3">
+                    <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span className="font-semibold">Shop Now</span>
+                  </Button>
+                </Link>
                 <div className="flex items-center space-x-3">
                   <div className="flex space-x-1">
                     {[1, 2, 3, 4, 5].map((star) => (
@@ -314,7 +450,7 @@ export default async function HomePage() {
             </p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
-            {categories.map((category) => {
+            {categories.map((category: any) => {
               const IconComponent = categoryIcons[category.slug] || Monitor
               return (
                 <Link
@@ -352,7 +488,7 @@ export default async function HomePage() {
             </Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
-            {featuredProducts.map((product) => (
+            {featuredProducts.map((product: any) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>
@@ -360,8 +496,8 @@ export default async function HomePage() {
       </section>
 
       {/* Enhanced Category-Based Product Displays */}
-      {categories.map((category, index) => {
-        const categoryProducts = productsByCategory[category.slug] || []
+      {categories.map((category: any, index: number) => {
+        const categoryProducts = (productsByCategory as any)[category.slug] || []
         if (categoryProducts.length === 0) return null
 
         const IconComponent = categoryIcons[category.slug] || Monitor
@@ -390,7 +526,7 @@ export default async function HomePage() {
                 </Link>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
-                {categoryProducts.slice(0, 4).map((product) => (
+                {categoryProducts.slice(0, 4).map((product: any) => (
                   <ProductCard key={product.id} product={product} />
                 ))}
               </div>
@@ -405,11 +541,9 @@ export default async function HomePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12 mb-8 lg:mb-12">
             <div className="space-y-4 sm:space-y-6 sm:col-span-2 lg:col-span-1">
               <div className="flex items-center">
-                <Image
-                  src="https://sjc.microlink.io/wF7U_5sWGJcxTWuj1a7z41-UHrQuxeWo174RRJGTufFAzFKHnrzRAs0bT29MJ2Pvso-VlamrTvUV40KpcvMcfQ.jpeg"
+                <img
+                  src="https://i.ibb.co/NdT015WL/Chat-GPT-Image-Jun-30-2025-09-40-05-PM-removebg-preview.png"
                   alt="MD Electronics"
-                  width={250}
-                  height={63}
                   className="h-16 sm:h-18 w-auto brightness-0 invert"
                 />
               </div>
@@ -442,7 +576,7 @@ export default async function HomePage() {
                 <Link href="/about" className="hover:text-white transition-colors block">
                   About Us
                 </Link>
-                <Link href="#footer" className="hover:text-white transition-colors block">
+                <Link href="#" className="hover:text-white transition-colors block">
                   Contact
                 </Link>
                 <Link href="#" className="hover:text-white transition-colors block">
@@ -454,15 +588,21 @@ export default async function HomePage() {
             <div>
               <h4 className="font-bold text-base sm:text-lg mb-4 sm:mb-6">Categories</h4>
               <div className="space-y-2 sm:space-y-3 text-gray-400 text-sm sm:text-base">
-                {categories.slice(0, 6).map((category) => (
-                  <Link
-                    key={category.id}
-                    href={`/products?category=${category.slug}`}
-                    className="hover:text-white transition-colors block"
-                  >
-                    {category.name}
-                  </Link>
-                ))}
+                <Link href="/products?category=refrigerators" className="hover:text-white transition-colors block">
+                  Refrigerators
+                </Link>
+                <Link href="/products?category=ovens" className="hover:text-white transition-colors block">
+                  Ovens
+                </Link>
+                <Link href="/products?category=televisions" className="hover:text-white transition-colors block">
+                  Televisions
+                </Link>
+                <Link href="/products?category=air-conditioners" className="hover:text-white transition-colors block">
+                  Air Conditioners
+                </Link>
+                <Link href="/products?category=washing-machines" className="hover:text-white transition-colors block">
+                  Washing Machines
+                </Link>
               </div>
             </div>
 
@@ -471,41 +611,37 @@ export default async function HomePage() {
               <div className="space-y-2 sm:space-y-3 text-gray-400 text-sm sm:text-base">
                 <p className="flex items-start space-x-2">
                   <span className="flex-shrink-0">📍</span>
-                  <span>123 Electronics Street, Tech City, TC 12345</span>
+                  <span>123 Electronics Street, Dhaka, Bangladesh</span>
                 </p>
                 <p className="flex items-center space-x-2">
                   <span>📞</span>
-                  <span>(555) 123-4567</span>
+                  <span>+880 1234-567890</span>
                 </p>
                 <p className="flex items-center space-x-2">
                   <span>✉️</span>
                   <span>info@mdelectronics.com</span>
                 </p>
-                <p className="flex items-start space-x-2">
-                  <span className="flex-shrink-0">🕒</span>
-                  <span>Mon-Sat: 9AM-8PM, Sun: 10AM-6PM</span>
+                <p className="flex items-center space-x-2">
+                  <span>🕒</span>
+                  <span>Mon-Sat: 9AM-8PM</span>
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="border-t border-gray-800 pt-6 sm:pt-8 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
-            <p className="text-gray-400 text-sm sm:text-base">© 2024 MD Electronics. All rights reserved.</p>
-            <div className="flex items-center space-x-4 sm:space-x-6">
-              <span className="text-gray-400 text-sm sm:text-base">We Accept:</span>
-              <div className="flex space-x-2 sm:space-x-3">
-                <div className="w-8 h-5 sm:w-10 sm:h-6 bg-blue-600 rounded text-xs flex items-center justify-center font-semibold">
-                  VISA
-                </div>
-                <div className="w-8 h-5 sm:w-10 sm:h-6 bg-red-600 rounded text-xs flex items-center justify-center font-semibold">
-                  MC
-                </div>
-                <div className="w-8 h-5 sm:w-10 sm:h-6 bg-yellow-500 rounded text-xs flex items-center justify-center text-black font-semibold">
-                  PP
-                </div>
-                <div className="w-8 h-5 sm:w-10 sm:h-6 bg-green-600 rounded text-xs flex items-center justify-center font-semibold">
-                  GPay
-                </div>
+          <div className="border-t border-gray-800 pt-6 sm:pt-8">
+            <div className="flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0">
+              <p className="text-gray-400 text-sm sm:text-base">© 2024 MD Electronics. All rights reserved.</p>
+              <div className="flex items-center space-x-4 sm:space-x-6 text-gray-400 text-sm sm:text-base">
+                <Link href="#" className="hover:text-white transition-colors">
+                  Privacy Policy
+                </Link>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Terms of Service
+                </Link>
+                <Link href="#" className="hover:text-white transition-colors">
+                  Return Policy
+                </Link>
               </div>
             </div>
           </div>
