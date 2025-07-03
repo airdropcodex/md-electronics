@@ -7,11 +7,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error("Missing Supabase environment variables")
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-// Admin client with service role key for admin operations
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-export const supabaseAdmin = supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey) : null
+// Client-side Supabase client (only uses public environment variables)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+})
 
 export type Database = {
   public: {
@@ -273,82 +275,106 @@ export const getProducts = async (filters?: {
   featured?: boolean
   limit?: number
 }) => {
-  let query = supabase
-    .from("products")
-    .select(`
-      *,
-      categories (name, slug),
-      brands (name, slug)
-    `)
-    .eq("is_active", true)
+  try {
+    let query = supabase
+      .from("products")
+      .select(`
+        *,
+        categories (name, slug),
+        brands (name, slug)
+      `)
+      .eq("is_active", true)
 
-  if (filters?.category) {
-    const { data: category } = await supabase.from("categories").select("id").eq("slug", filters.category).single()
+    if (filters?.category) {
+      const { data: category } = await supabase.from("categories").select("id").eq("slug", filters.category).single()
 
-    if (category) {
-      query = query.eq("category_id", category.id)
+      if (category) {
+        query = query.eq("category_id", category.id)
+      }
     }
-  }
 
-  if (filters?.search) {
-    query = query.ilike("name", `%${filters.search}%`)
-  }
+    if (filters?.search) {
+      query = query.ilike("name", `%${filters.search}%`)
+    }
 
-  if (filters?.featured) {
-    query = query.eq("is_featured", true)
-  }
+    if (filters?.featured) {
+      query = query.eq("is_featured", true)
+    }
 
-  if (filters?.limit) {
-    query = query.limit(filters.limit)
-  }
+    if (filters?.limit) {
+      query = query.limit(filters.limit)
+    }
 
-  const { data, error } = await query.order("created_at", { ascending: false })
+    const { data, error } = await query.order("created_at", { ascending: false })
 
-  if (error) {
+    if (error) {
+      console.error("Error fetching products:", error)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
     console.error("Error fetching products:", error)
     return []
   }
-
-  return data || []
 }
 
 export const getProduct = async (slug: string) => {
-  const { data: product, error } = await supabase
-    .from("products")
-    .select(`
-      *,
-      categories (name, slug),
-      brands (name, slug)
-    `)
-    .eq("slug", slug)
-    .eq("is_active", true)
-    .single()
+  try {
+    const { data: product, error } = await supabase
+      .from("products")
+      .select(`
+        *,
+        categories (name, slug),
+        brands (name, slug)
+      `)
+      .eq("slug", slug)
+      .eq("is_active", true)
+      .single()
 
-  if (error || !product) {
+    if (error || !product) {
+      return null
+    }
+
+    return product
+  } catch (error) {
+    console.error("Error fetching product:", error)
     return null
   }
-
-  return product
 }
 
 export const getCategories = async () => {
-  const { data: categories, error } = await supabase.from("categories").select("*").eq("is_active", true).order("name")
+  try {
+    const { data: categories, error } = await supabase
+      .from("categories")
+      .select("*")
+      .eq("is_active", true)
+      .order("name")
 
-  if (error) {
+    if (error) {
+      console.error("Error fetching categories:", error)
+      return []
+    }
+
+    return categories || []
+  } catch (error) {
     console.error("Error fetching categories:", error)
     return []
   }
-
-  return categories || []
 }
 
 export const getBrands = async () => {
-  const { data: brands, error } = await supabase.from("brands").select("*").eq("is_active", true).order("name")
+  try {
+    const { data: brands, error } = await supabase.from("brands").select("*").eq("is_active", true).order("name")
 
-  if (error) {
+    if (error) {
+      console.error("Error fetching brands:", error)
+      return []
+    }
+
+    return brands || []
+  } catch (error) {
     console.error("Error fetching brands:", error)
     return []
   }
-
-  return brands || []
 }

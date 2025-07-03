@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect, Suspense } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Star, Search, Heart, ShoppingCart, ArrowLeft, Plus, Minus } from "lucide-react"
+import { Star, Search, Heart, ShoppingCart, ArrowLeft, Plus, Minus, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -14,7 +14,6 @@ import { AccountDropdown } from "@/components/account/account-dropdown"
 import { supabase } from "@/lib/supabase"
 import { notFound } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { MobileMenu } from "@/components/mobile-menu"
 
 function ProductDetailClient({ slug }: { slug: string }) {
   const [product, setProduct] = useState<any>(null)
@@ -283,7 +282,9 @@ function ProductDetailClient({ slug }: { slug: string }) {
 
               <AccountDropdown />
 
-              <MobileMenu cartCount={cartCount} wishlistCount={wishlistCount} user={null} />
+              <Button variant="ghost" size="sm" className="lg:hidden p-2 hover:bg-gray-100 rounded-xl">
+                <Menu className="w-4 h-4 text-gray-600" />
+              </Button>
             </div>
           </div>
 

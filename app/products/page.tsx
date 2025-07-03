@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Star, Search, Heart, ShoppingCart, Filter, Grid, List } from "lucide-react"
+import { Star, Search, Heart, ShoppingCart, Filter, Grid, List, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -13,7 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AccountDropdown } from "@/components/account/account-dropdown"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { MobileMenu } from "@/components/mobile-menu"
 
 async function getProducts(filters: any = {}) {
   let query = supabase
@@ -116,7 +115,6 @@ export default function ProductsPage() {
     sortBy: "newest",
   })
   const { toast } = useToast()
-  const [showMobileSearch, setShowMobileSearch] = useState(false)
 
   useEffect(() => {
     // Get URL parameters
@@ -350,16 +348,6 @@ export default function ProductsPage() {
               </form>
 
               <div className="flex items-center space-x-1 sm:space-x-2">
-                {/* Mobile Search Toggle */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="md:hidden p-2 hover:bg-gray-100 rounded-xl"
-                  onClick={() => setShowMobileSearch(!showMobileSearch)}
-                >
-                  <Search className="w-4 h-4 text-gray-600" />
-                </Button>
-
                 <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl relative">
                   <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-red-500 transition-colors" />
                   {wishlistCount > 0 && (
@@ -380,27 +368,14 @@ export default function ProductsPage() {
 
                 <AccountDropdown />
 
-                <MobileMenu cartCount={cartCount} wishlistCount={wishlistCount} user={null} />
+                <Button variant="ghost" size="sm" className="lg:hidden p-2 sm:p-3 hover:bg-gray-100 rounded-xl">
+                  <Menu className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                </Button>
               </div>
             </div>
           </div>
         </div>
       </header>
-
-      {/* Mobile Search Bar */}
-      {showMobileSearch && (
-        <div className="md:hidden pb-4">
-          <form onSubmit={handleSearch} className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              placeholder="Search products..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-3 py-2 w-full border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-            />
-          </form>
-        </div>
-      )}
 
       {/* Breadcrumb */}
       <div className="bg-gray-50 py-4">

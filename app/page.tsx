@@ -18,6 +18,7 @@ import {
   Wind,
   WashingMachine,
   Snowflake,
+  Menu,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,80 +26,243 @@ import { Badge } from "@/components/ui/badge"
 import { AccountDropdown } from "@/components/account/account-dropdown"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { MobileMenu } from "@/components/mobile-menu"
+
+// Mock data for development/fallback
+const mockFeaturedProducts = [
+  {
+    id: "1",
+    name: "Samsung 4-Door French Door Refrigerator",
+    slug: "samsung-4-door-french-door-refrigerator",
+    price: 89999,
+    original_price: 99999,
+    images: ["/placeholder.svg?height=300&width=300"],
+    stock_quantity: 15,
+    brands: { name: "Samsung" },
+    categories: { name: "Refrigerators", slug: "refrigerators" },
+  },
+  {
+    id: "2",
+    name: "LG 55-inch 4K Smart TV",
+    slug: "lg-55-inch-4k-smart-tv",
+    price: 65999,
+    original_price: 75999,
+    images: ["/placeholder.svg?height=300&width=300"],
+    stock_quantity: 8,
+    brands: { name: "LG" },
+    categories: { name: "Televisions", slug: "televisions" },
+  },
+  {
+    id: "3",
+    name: "Whirlpool Front Load Washing Machine",
+    slug: "whirlpool-front-load-washing-machine",
+    price: 45999,
+    original_price: 52999,
+    images: ["/placeholder.svg?height=300&width=300"],
+    stock_quantity: 12,
+    brands: { name: "Whirlpool" },
+    categories: { name: "Washing Machines", slug: "washing-machines" },
+  },
+  {
+    id: "4",
+    name: "Daikin 1.5 Ton Split AC",
+    slug: "daikin-1-5-ton-split-ac",
+    price: 38999,
+    original_price: 42999,
+    images: ["/placeholder.svg?height=300&width=300"],
+    stock_quantity: 6,
+    brands: { name: "Daikin" },
+    categories: { name: "Air Conditioners", slug: "air-conditioners" },
+  },
+]
+
+const mockCategories = [
+  { id: "1", name: "Refrigerators", slug: "refrigerators", description: "Keep your food fresh" },
+  { id: "2", name: "Ovens", slug: "ovens", description: "Cook with precision" },
+  { id: "3", name: "Televisions", slug: "televisions", description: "Entertainment at its best" },
+  { id: "4", name: "Air Conditioners", slug: "air-conditioners", description: "Stay cool and comfortable" },
+  { id: "5", name: "Washing Machines", slug: "washing-machines", description: "Clean clothes effortlessly" },
+  { id: "6", name: "Deep Freezers", slug: "deep-freezers", description: "Long-term storage solution" },
+]
 
 async function getFeaturedProducts() {
-  const { data: products, error } = await supabase
-    .from("products")
-    .select(`
-      *,
-      categories (name, slug),
-      brands (name, slug)
-    `)
-    .eq("is_featured", true)
-    .eq("is_active", true)
-    .limit(4)
+  try {
+    const { data: products, error } = await supabase
+      .from("products")
+      .select(`
+        *,
+        categories (name, slug),
+        brands (name, slug)
+      `)
+      .eq("is_featured", true)
+      .eq("is_active", true)
+      .limit(4)
 
-  if (error) {
+    if (error) {
+      console.error("Error fetching featured products:", error)
+      return mockFeaturedProducts
+    }
+
+    return products && products.length > 0 ? products : mockFeaturedProducts
+  } catch (error) {
     console.error("Error fetching featured products:", error)
-    return []
+    return mockFeaturedProducts
   }
-
-  return products || []
 }
 
 async function getCategories() {
-  const { data: categories, error } = await supabase.from("categories").select("*").eq("is_active", true).order("name")
+  try {
+    const { data: categories, error } = await supabase
+      .from("categories")
+      .select("*")
+      .eq("is_active", true)
+      .order("name")
 
-  if (error) {
+    if (error) {
+      console.error("Error fetching categories:", error)
+      return mockCategories
+    }
+
+    return categories && categories.length > 0 ? categories : mockCategories
+  } catch (error) {
     console.error("Error fetching categories:", error)
-    return []
+    return mockCategories
   }
-
-  return categories || []
 }
 
 async function getProductsByCategory() {
-  const { data: products, error } = await supabase
-    .from("products")
-    .select(`
-      *,
-      categories (name, slug),
-      brands (name, slug)
-    `)
-    .eq("is_active", true)
-    .order("created_at", { ascending: false })
+  try {
+    const { data: products, error } = await supabase
+      .from("products")
+      .select(`
+        *,
+        categories (name, slug),
+        brands (name, slug)
+      `)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
 
-  if (error) {
-    console.error("Error fetching products by category:", error)
-    return {}
-  }
-
-  // Group products by category, ensuring exactly 4 products per category
-  const productsByCategory: Record<string, any[]> = {}
-  const categoryOrder = [
-    "refrigerators",
-    "ovens",
-    "televisions",
-    "air-conditioners",
-    "washing-machines",
-    "deep-freezers",
-  ]
-
-  // Initialize each category with empty array
-  categoryOrder.forEach((slug) => {
-    productsByCategory[slug] = []
-  })
-
-  // Distribute products evenly across categories
-  products?.forEach((product) => {
-    const categorySlug = product.categories?.slug
-    if (categorySlug && productsByCategory[categorySlug] && productsByCategory[categorySlug].length < 4) {
-      productsByCategory[categorySlug].push(product)
+    if (error) {
+      console.error("Error fetching products by category:", error)
+      return generateMockProductsByCategory()
     }
-  })
 
-  return productsByCategory
+    if (!products || products.length === 0) {
+      return generateMockProductsByCategory()
+    }
+
+    // Group products by category, ensuring exactly 4 products per category
+    const productsByCategory: Record<string, any[]> = {}
+    const categoryOrder = [
+      "refrigerators",
+      "ovens",
+      "televisions",
+      "air-conditioners",
+      "washing-machines",
+      "deep-freezers",
+    ]
+
+    // Initialize each category with empty array
+    categoryOrder.forEach((slug) => {
+      productsByCategory[slug] = []
+    })
+
+    // Distribute products evenly across categories
+    products?.forEach((product) => {
+      const categorySlug = product.categories?.slug
+      if (categorySlug && productsByCategory[categorySlug] && productsByCategory[categorySlug].length < 4) {
+        productsByCategory[categorySlug].push(product)
+      }
+    })
+
+    return productsByCategory
+  } catch (error) {
+    console.error("Error fetching products by category:", error)
+    return generateMockProductsByCategory()
+  }
+}
+
+function generateMockProductsByCategory() {
+  return {
+    refrigerators: mockFeaturedProducts
+      .filter((p) => p.categories.slug === "refrigerators")
+      .concat([
+        { ...mockFeaturedProducts[0], id: "ref1", name: "Samsung Double Door Refrigerator" },
+        { ...mockFeaturedProducts[0], id: "ref2", name: "LG Side by Side Refrigerator" },
+        { ...mockFeaturedProducts[0], id: "ref3", name: "Whirlpool Single Door Refrigerator" },
+      ])
+      .slice(0, 4),
+    televisions: mockFeaturedProducts
+      .filter((p) => p.categories.slug === "televisions")
+      .concat([
+        { ...mockFeaturedProducts[1], id: "tv1", name: "Sony 65-inch OLED TV" },
+        { ...mockFeaturedProducts[1], id: "tv2", name: "Samsung 43-inch Smart TV" },
+        { ...mockFeaturedProducts[1], id: "tv3", name: "TCL 32-inch LED TV" },
+      ])
+      .slice(0, 4),
+    "washing-machines": mockFeaturedProducts
+      .filter((p) => p.categories.slug === "washing-machines")
+      .concat([
+        { ...mockFeaturedProducts[2], id: "wm1", name: "Samsung Top Load Washing Machine" },
+        { ...mockFeaturedProducts[2], id: "wm2", name: "LG Semi-Automatic Washing Machine" },
+        { ...mockFeaturedProducts[2], id: "wm3", name: "Bosch Front Load Washing Machine" },
+      ])
+      .slice(0, 4),
+    "air-conditioners": mockFeaturedProducts
+      .filter((p) => p.categories.slug === "air-conditioners")
+      .concat([
+        { ...mockFeaturedProducts[3], id: "ac1", name: "Mitsubishi 2 Ton Split AC" },
+        { ...mockFeaturedProducts[3], id: "ac2", name: "Carrier Window AC" },
+        { ...mockFeaturedProducts[3], id: "ac3", name: "Voltas Inverter AC" },
+      ])
+      .slice(0, 4),
+    ovens: [
+      {
+        ...mockFeaturedProducts[0],
+        id: "oven1",
+        name: "Samsung Microwave Oven",
+        categories: { name: "Ovens", slug: "ovens" },
+      },
+      {
+        ...mockFeaturedProducts[0],
+        id: "oven2",
+        name: "LG Convection Oven",
+        categories: { name: "Ovens", slug: "ovens" },
+      },
+      { ...mockFeaturedProducts[0], id: "oven3", name: "Whirlpool OTG", categories: { name: "Ovens", slug: "ovens" } },
+      {
+        ...mockFeaturedProducts[0],
+        id: "oven4",
+        name: "Panasonic Steam Oven",
+        categories: { name: "Ovens", slug: "ovens" },
+      },
+    ],
+    "deep-freezers": [
+      {
+        ...mockFeaturedProducts[0],
+        id: "df1",
+        name: "Haier Deep Freezer",
+        categories: { name: "Deep Freezers", slug: "deep-freezers" },
+      },
+      {
+        ...mockFeaturedProducts[0],
+        id: "df2",
+        name: "Samsung Chest Freezer",
+        categories: { name: "Deep Freezers", slug: "deep-freezers" },
+      },
+      {
+        ...mockFeaturedProducts[0],
+        id: "df3",
+        name: "LG Upright Freezer",
+        categories: { name: "Deep Freezers", slug: "deep-freezers" },
+      },
+      {
+        ...mockFeaturedProducts[0],
+        id: "df4",
+        name: "Whirlpool Glass Top Freezer",
+        categories: { name: "Deep Freezers", slug: "deep-freezers" },
+      },
+    ],
+  }
 }
 
 export default function HomePage() {
@@ -108,8 +272,8 @@ export default function HomePage() {
   const [cartCount, setCartCount] = useState(0)
   const [wishlistCount, setWishlistCount] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
-  const [showMobileSearch, setShowMobileSearch] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -129,21 +293,34 @@ export default function HomePage() {
   }, [])
 
   const loadData = async () => {
-    const [featured, cats, productsByCat] = await Promise.all([
-      getFeaturedProducts(),
-      getCategories(),
-      getProductsByCategory(),
-    ])
-    setFeaturedProducts(featured)
-    setCategories(cats)
-    setProductsByCategory(productsByCat)
+    setIsLoading(true)
+    try {
+      const [featured, cats, productsByCat] = await Promise.all([
+        getFeaturedProducts(),
+        getCategories(),
+        getProductsByCategory(),
+      ])
+      setFeaturedProducts(featured)
+      setCategories(cats)
+      setProductsByCategory(productsByCat)
+    } catch (error) {
+      console.error("Error loading data:", error)
+      // Set fallback data
+      setFeaturedProducts(mockFeaturedProducts)
+      setCategories(mockCategories)
+      setProductsByCategory(generateMockProductsByCategory())
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const updateCounts = () => {
-    const cart = JSON.parse(localStorage.getItem("cart") || "[]")
-    const wishlist = JSON.parse(localStorage.getItem("wishlist") || "[]")
-    setCartCount(cart.length)
-    setWishlistCount(wishlist.length)
+    if (typeof window !== "undefined") {
+      const cart = JSON.parse(localStorage.getItem("cart") || "[]")
+      const wishlist = JSON.parse(localStorage.getItem("wishlist") || "[]")
+      setCartCount(cart.length)
+      setWishlistCount(wishlist.length)
+    }
   }
 
   const handleSearch = (e: React.FormEvent) => {
@@ -154,6 +331,8 @@ export default function HomePage() {
   }
 
   const handleAddToCart = (product: any) => {
+    if (typeof window === "undefined") return
+
     const existingCart = JSON.parse(localStorage.getItem("cart") || "[]")
     const existingItemIndex = existingCart.findIndex((item: any) => item.id === product.id)
 
@@ -180,6 +359,8 @@ export default function HomePage() {
   }
 
   const handleAddToWishlist = (product: any) => {
+    if (typeof window === "undefined") return
+
     const existingWishlist = JSON.parse(localStorage.getItem("wishlist") || "[]")
     const isAlreadyInWishlist = existingWishlist.some((item: any) => item.id === product.id)
 
@@ -296,6 +477,17 @@ export default function HomePage() {
     </div>
   )
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading MD Electronics...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-white">
       {/* Enhanced Header with Larger Logo and Account Menu */}
@@ -350,16 +542,6 @@ export default function HomePage() {
               </form>
 
               <div className="flex items-center space-x-1 sm:space-x-2">
-                {/* Mobile Search Toggle */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="md:hidden p-2 hover:bg-gray-100 rounded-xl"
-                  onClick={() => setShowMobileSearch(!showMobileSearch)}
-                >
-                  <Search className="w-4 h-4 text-gray-600" />
-                </Button>
-
                 <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl relative">
                   <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-red-500 transition-colors" />
                   {wishlistCount > 0 && (
@@ -381,27 +563,14 @@ export default function HomePage() {
                 {/* Account Dropdown */}
                 <AccountDropdown />
 
-                <MobileMenu cartCount={cartCount} wishlistCount={wishlistCount} user={null} />
+                <Button variant="ghost" size="sm" className="lg:hidden p-2 sm:p-3 hover:bg-gray-100 rounded-xl">
+                  <Menu className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                </Button>
               </div>
             </div>
           </div>
         </div>
       </header>
-
-      {/* Mobile Search Bar */}
-      {showMobileSearch && (
-        <div className="md:hidden pb-4">
-          <form onSubmit={handleSearch} className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              placeholder="Search products..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-3 py-2 w-full border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-            />
-          </form>
-        </div>
-      )}
 
       {/* Enhanced Hero Section */}
       <section className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-12 sm:py-16 lg:py-20">

@@ -5,13 +5,12 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Search, Heart, ShoppingCart, Trash2 } from "lucide-react"
+import { Search, Heart, ShoppingCart, Menu, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { AccountDropdown } from "@/components/account/account-dropdown"
 import { useToast } from "@/hooks/use-toast"
-import { MobileMenu } from "@/components/mobile-menu"
 
 interface WishlistItem {
   id: string
@@ -187,7 +186,9 @@ export default function WishlistPage() {
 
               <AccountDropdown />
 
-              <MobileMenu cartCount={cartCount} wishlistCount={wishlistCount} user={null} />
+              <Button variant="ghost" size="sm" className="lg:hidden p-2 hover:bg-gray-100 rounded-xl">
+                <Menu className="w-4 h-4 text-gray-600" />
+              </Button>
             </div>
           </div>
 

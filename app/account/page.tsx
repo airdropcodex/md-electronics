@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Search, Heart, ShoppingCart, User, Package, MapPin, CreditCard, Edit } from "lucide-react"
+import { Search, Heart, ShoppingCart, Menu, User, Package, MapPin, CreditCard, Edit } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,7 +13,6 @@ import { Label } from "@/components/ui/label"
 import { AccountDropdown } from "@/components/account/account-dropdown"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
-import { MobileMenu } from "@/components/mobile-menu"
 
 export default function AccountPage() {
   const [user, setUser] = useState<any>(null)
@@ -226,7 +225,9 @@ export default function AccountPage() {
 
               <AccountDropdown />
 
-              <MobileMenu cartCount={cartCount} wishlistCount={wishlistCount} user={user} />
+              <Button variant="ghost" size="sm" className="lg:hidden p-2 hover:bg-gray-100 rounded-xl">
+                <Menu className="w-4 h-4 text-gray-600" />
+              </Button>
             </div>
           </div>
 

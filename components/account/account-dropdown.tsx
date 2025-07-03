@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { User, LogOut, Package, Settings, Heart } from "lucide-react"
+import { User, LogOut, Settings, ShoppingBag, Heart, UserCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -19,73 +19,50 @@ import { useToast } from "@/hooks/use-toast"
 export function AccountDropdown() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [cartCount, setCartCount] = useState(0)
-  const [wishlistCount, setWishlistCount] = useState(0)
   const { toast } = useToast()
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
+    const getSession = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        setUser(session?.user ?? null)
+      } catch (error) {
+        console.error("Error getting session:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    getSession()
 
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null)
       setLoading(false)
     })
 
-    // Load cart and wishlist counts
-    updateCounts()
-
-    // Listen for cart and wishlist updates
-    const handleCartUpdate = () => updateCounts()
-    const handleWishlistUpdate = () => updateCounts()
-
-    window.addEventListener("cartUpdated", handleCartUpdate)
-    window.addEventListener("wishlistUpdated", handleWishlistUpdate)
-
-    return () => {
-      subscription.unsubscribe()
-      window.removeEventListener("cartUpdated", handleCartUpdate)
-      window.removeEventListener("wishlistUpdated", handleWishlistUpdate)
-    }
+    return () => subscription.unsubscribe()
   }, [])
-
-  const updateCounts = () => {
-    const cart = JSON.parse(localStorage.getItem("cart") || "[]")
-    const wishlist = JSON.parse(localStorage.getItem("wishlist") || "[]")
-    setCartCount(cart.length)
-    setWishlistCount(wishlist.length)
-  }
 
   const handleSignOut = async () => {
     try {
       const { error } = await supabase.auth.signOut()
-      if (error) {
-        toast({
-          title: "Error",
-          description: "Failed to sign out. Please try again.",
-          variant: "destructive",
-        })
-      } else {
-        toast({
-          title: "Signed Out",
-          description: "You have been successfully signed out.",
-        })
-        // Clear local storage
-        localStorage.removeItem("cart")
-        localStorage.removeItem("wishlist")
-        window.dispatchEvent(new Event("cartUpdated"))
-        window.dispatchEvent(new Event("wishlistUpdated"))
-      }
-    } catch (error) {
+      if (error) throw error
+
       toast({
-        title: "Error",
-        description: "An unexpected error occurred.",
+        title: "Signed out successfully",
+        description: "You have been logged out of your account.",
+      })
+    } catch (error) {
+      console.error("Error signing out:", error)
+      toast({
+        title: "Error signing out",
+        description: "There was a problem signing you out. Please try again.",
         variant: "destructive",
       })
     }
@@ -94,24 +71,21 @@ export function AccountDropdown() {
   if (loading) {
     return (
       <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl">
-        <User className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+        <div className="w-4 h-4 sm:w-5 sm:h-5 bg-gray-300 rounded-full animate-pulse" />
       </Button>
     )
   }
 
   if (!user) {
     return (
-      <div className="flex items-center space-x-1 sm:space-x-2">
+      <div className="flex items-center space-x-2">
         <Link href="/auth/signin">
-          <Button variant="ghost" size="sm" className="text-xs sm:text-sm font-medium px-2 sm:px-3 py-1 sm:py-2">
+          <Button variant="ghost" size="sm" className="text-gray-600 hover:text-blue-600 font-medium">
             Sign In
           </Button>
         </Link>
         <Link href="/auth/signup">
-          <Button
-            size="sm"
-            className="bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-medium px-2 sm:px-3 py-1 sm:py-2"
-          >
+          <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg">
             Sign Up
           </Button>
         </Link>
@@ -119,56 +93,56 @@ export function AccountDropdown() {
     )
   }
 
-  const userInitials = user.user_metadata?.full_name
-    ? user.user_metadata.full_name
-        .split(" ")
-        .map((n: string) => n[0])
-        .join("")
-        .toUpperCase()
-    : user.email?.[0]?.toUpperCase() || "U"
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-8 w-8 sm:h-10 sm:w-10 rounded-full">
-          <Avatar className="h-8 w-8 sm:h-10 sm:w-10">
-            <AvatarImage src={user.user_metadata?.avatar_url || "/placeholder.svg"} alt="Profile" />
-            <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold text-xs sm:text-sm">
-              {userInitials}
+        <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl">
+          <Avatar className="w-6 h-6 sm:w-8 sm:h-8">
+            <AvatarImage src={user.user_metadata?.avatar_url || "/placeholder.svg"} alt={user.email} />
+            <AvatarFallback>
+              <UserCircle className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
             </AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end" forceMount>
+      <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.user_metadata?.full_name || "User"}</p>
+            <p className="text-sm font-medium leading-none">
+              {user.user_metadata?.full_name || user.email?.split("@")[0]}
+            </p>
             <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href="/account" className="cursor-pointer">
-            <Settings className="mr-2 h-4 w-4" />
-            <span>My Account</span>
+          <Link href="/account" className="flex items-center">
+            <User className="mr-2 h-4 w-4" />
+            <span>Account</span>
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href="/account/orders" className="cursor-pointer">
-            <Package className="mr-2 h-4 w-4" />
-            <span>My Orders</span>
+          <Link href="/account/orders" className="flex items-center">
+            <ShoppingBag className="mr-2 h-4 w-4" />
+            <span>Orders</span>
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href="/account/wishlist" className="cursor-pointer">
+          <Link href="/account/wishlist" className="flex items-center">
             <Heart className="mr-2 h-4 w-4" />
-            <span>Wishlist ({wishlistCount})</span>
+            <span>Wishlist</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/account/profile" className="flex items-center">
+            <Settings className="mr-2 h-4 w-4" />
+            <span>Settings</span>
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer">
+        <DropdownMenuItem onClick={handleSignOut} className="text-red-600 focus:text-red-600">
           <LogOut className="mr-2 h-4 w-4" />
-          <span>Sign Out</span>
+          <span>Sign out</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
