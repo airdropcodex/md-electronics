@@ -92,6 +92,66 @@ export default function SignUpPage() {
     }
   }
 
+  const [phone, setPhone] = useState("");
+  const handlePhoneSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        phone
+      });
+      if (error) {
+        toast({
+          title: "Phone Sign Up Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "OTP Sent",
+          description: "Check your phone for the OTP code.",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to sign up with phone.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      const prodUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://v0-mdelectronics.vercel.app";
+      const isLocalhost = typeof window !== "undefined" && window.location.hostname === "localhost";
+      const redirectTo = isLocalhost
+        ? `${window.location.origin}/auth/callback`
+        : `${prodUrl}/auth/callback`;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo
+        }
+      });
+      if (error) {
+        toast({
+          title: "Google Sign Up Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to sign up with Google.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -228,6 +288,35 @@ export default function SignUpPage() {
                 {loading ? "Creating Account..." : "Create Account"}
               </Button>
             </form>
+
+            {/* Social Sign Up */}
+            <div className="mt-6 flex flex-col gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full flex items-center justify-center gap-2"
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+              >
+                <img src="/google.svg" alt="Google" width={20} height={20} />
+                Continue with Google
+              </Button>
+              {/* Phone Sign Up */}
+              <form onSubmit={handlePhoneSignUp} className="flex gap-2 mt-2">
+                <Input
+                  name="phone"
+                  type="tel"
+                  placeholder="Enter phone number"
+                  className="flex-1"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value)}
+                  required
+                />
+                <Button type="submit" variant="outline" disabled={loading}>
+                  Continue with Phone
+                </Button>
+              </form>
+            </div>
 
             <div className="mt-6 text-center">
               <p className="text-gray-600">

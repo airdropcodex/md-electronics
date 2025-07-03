@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { AccountDropdown } from "@/components/account/account-dropdown"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
+import { getUserOrders } from "@/lib/supabase-admin"
 
 export default function AccountPage() {
   const [user, setUser] = useState<any>(null)
@@ -95,32 +96,16 @@ export default function AccountPage() {
 
   const loadUserData = async () => {
     // Load user orders (mock data for now)
-    setOrders([
-      {
-        id: "ORD-001",
-        date: "2024-01-15",
-        status: "Delivered",
-        total: 45000,
-        items: 2,
-        products: ["Samsung Refrigerator", "LG Washing Machine"],
-      },
-      {
-        id: "ORD-002",
-        date: "2024-01-10",
-        status: "Processing",
-        total: 25000,
-        items: 1,
-        products: ["Sony TV 55 inch"],
-      },
-      {
-        id: "ORD-003",
-        date: "2024-01-05",
-        status: "Shipped",
-        total: 15000,
-        items: 1,
-        products: ["Microwave Oven"],
-      },
-    ])
+    useEffect(() => {
+      async function fetchOrders() {
+        const user = supabase.auth.user()
+        if (user) {
+          const fetchedOrders = await getUserOrders(user.id)
+          setOrders(fetchedOrders)
+        }
+      }
+      fetchOrders()
+    }, [])
   }
 
   const handleSearch = (e: React.FormEvent) => {

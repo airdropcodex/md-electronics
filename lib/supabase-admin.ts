@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js"
 
+// Prefer SUPABASE_SERVICE_ROLE_KEY, fallback to NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY for local/dev
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!
 
 // Server-side admin client
 export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
