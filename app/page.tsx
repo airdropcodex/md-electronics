@@ -24,7 +24,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { AccountDropdown } from "@/components/account/account-dropdown"
-import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 
 // Mock data for development/fallback
@@ -83,103 +82,6 @@ const mockCategories = [
   { id: "5", name: "Washing Machines", slug: "washing-machines", description: "Clean clothes effortlessly" },
   { id: "6", name: "Deep Freezers", slug: "deep-freezers", description: "Long-term storage solution" },
 ]
-
-async function getFeaturedProducts() {
-  try {
-    const { data: products, error } = await supabase
-      .from("products")
-      .select(`
-        *,
-        categories (name, slug),
-        brands (name, slug)
-      `)
-      .eq("is_featured", true)
-      .eq("is_active", true)
-      .limit(4)
-
-    if (error) {
-      console.error("Error fetching featured products:", error)
-      return mockFeaturedProducts
-    }
-
-    return products && products.length > 0 ? products : mockFeaturedProducts
-  } catch (error) {
-    console.error("Error fetching featured products:", error)
-    return mockFeaturedProducts
-  }
-}
-
-async function getCategories() {
-  try {
-    const { data: categories, error } = await supabase
-      .from("categories")
-      .select("*")
-      .eq("is_active", true)
-      .order("name")
-
-    if (error) {
-      console.error("Error fetching categories:", error)
-      return mockCategories
-    }
-
-    return categories && categories.length > 0 ? categories : mockCategories
-  } catch (error) {
-    console.error("Error fetching categories:", error)
-    return mockCategories
-  }
-}
-
-async function getProductsByCategory() {
-  try {
-    const { data: products, error } = await supabase
-      .from("products")
-      .select(`
-        *,
-        categories (name, slug),
-        brands (name, slug)
-      `)
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-
-    if (error) {
-      console.error("Error fetching products by category:", error)
-      return generateMockProductsByCategory()
-    }
-
-    if (!products || products.length === 0) {
-      return generateMockProductsByCategory()
-    }
-
-    // Group products by category, ensuring exactly 4 products per category
-    const productsByCategory: Record<string, any[]> = {}
-    const categoryOrder = [
-      "refrigerators",
-      "ovens",
-      "televisions",
-      "air-conditioners",
-      "washing-machines",
-      "deep-freezers",
-    ]
-
-    // Initialize each category with empty array
-    categoryOrder.forEach((slug) => {
-      productsByCategory[slug] = []
-    })
-
-    // Distribute products evenly across categories
-    products?.forEach((product) => {
-      const categorySlug = product.categories?.slug
-      if (categorySlug && productsByCategory[categorySlug] && productsByCategory[categorySlug].length < 4) {
-        productsByCategory[categorySlug].push(product)
-      }
-    })
-
-    return productsByCategory
-  } catch (error) {
-    console.error("Error fetching products by category:", error)
-    return generateMockProductsByCategory()
-  }
-}
 
 function generateMockProductsByCategory() {
   return {
@@ -266,17 +168,16 @@ function generateMockProductsByCategory() {
 }
 
 export default function HomePage() {
-  const [featuredProducts, setFeaturedProducts] = useState([])
-  const [categories, setCategories] = useState([])
-  const [productsByCategory, setProductsByCategory] = useState({})
+  const [featuredProducts, setFeaturedProducts] = useState(mockFeaturedProducts)
+  const [categories, setCategories] = useState(mockCategories)
+  const [productsByCategory, setProductsByCategory] = useState(generateMockProductsByCategory())
   const [cartCount, setCartCount] = useState(0)
   const [wishlistCount, setWishlistCount] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
-    loadData()
     updateCounts()
 
     // Listen for cart and wishlist updates
@@ -291,28 +192,6 @@ export default function HomePage() {
       window.removeEventListener("wishlistUpdated", handleWishlistUpdate)
     }
   }, [])
-
-  const loadData = async () => {
-    setIsLoading(true)
-    try {
-      const [featured, cats, productsByCat] = await Promise.all([
-        getFeaturedProducts(),
-        getCategories(),
-        getProductsByCategory(),
-      ])
-      setFeaturedProducts(featured)
-      setCategories(cats)
-      setProductsByCategory(productsByCat)
-    } catch (error) {
-      console.error("Error loading data:", error)
-      // Set fallback data
-      setFeaturedProducts(mockFeaturedProducts)
-      setCategories(mockCategories)
-      setProductsByCategory(generateMockProductsByCategory())
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const updateCounts = () => {
     if (typeof window !== "undefined") {
@@ -542,14 +421,16 @@ export default function HomePage() {
               </form>
 
               <div className="flex items-center space-x-1 sm:space-x-2">
-                <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl relative">
-                  <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-red-500 transition-colors" />
-                  {wishlistCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center font-medium">
-                      {wishlistCount}
-                    </span>
-                  )}
-                </Button>
+                <Link href="/account/wishlist">
+                  <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl relative">
+                    <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-red-500 transition-colors" />
+                    {wishlistCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center font-medium">
+                        {wishlistCount}
+                      </span>
+                    )}
+                  </Button>
+                </Link>
 
                 <Link href="/cart">
                   <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl relative">
@@ -826,14 +707,11 @@ export default function HomePage() {
             <div className="flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0">
               <p className="text-gray-400 text-sm sm:text-base">© 2024 MD Electronics. All rights reserved.</p>
               <div className="flex items-center space-x-4 sm:space-x-6 text-gray-400 text-sm sm:text-base">
-                <Link href="#" className="hover:text-white transition-colors">
+                <Link href="/terms" className="hover:text-white transition-colors">
                   Privacy Policy
                 </Link>
-                <Link href="#" className="hover:text-white transition-colors">
+                <Link href="/terms" className="hover:text-white transition-colors">
                   Terms of Service
-                </Link>
-                <Link href="#" className="hover:text-white transition-colors">
-                  Return Policy
                 </Link>
               </div>
             </div>

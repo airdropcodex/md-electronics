@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { User, LogOut, Settings, ShoppingBag, Heart, UserCircle } from "lucide-react"
+import { User, LogOut, Settings, Package, Heart, MapPin, CreditCard } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -14,12 +14,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { supabase } from "@/lib/supabase"
-import { useToast } from "@/hooks/use-toast"
 
 export function AccountDropdown() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const { toast } = useToast()
 
   useEffect(() => {
     // Get initial session
@@ -28,7 +26,7 @@ export function AccountDropdown() {
         const {
           data: { session },
         } = await supabase.auth.getSession()
-        setUser(session?.user ?? null)
+        setUser(session?.user || null)
       } catch (error) {
         console.error("Error getting session:", error)
       } finally {
@@ -42,7 +40,7 @@ export function AccountDropdown() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setUser(session?.user ?? null)
+      setUser(session?.user || null)
       setLoading(false)
     })
 
@@ -51,45 +49,27 @@ export function AccountDropdown() {
 
   const handleSignOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
-
-      toast({
-        title: "Signed out successfully",
-        description: "You have been logged out of your account.",
-      })
+      await supabase.auth.signOut()
     } catch (error) {
       console.error("Error signing out:", error)
-      toast({
-        title: "Error signing out",
-        description: "There was a problem signing you out. Please try again.",
-        variant: "destructive",
-      })
     }
   }
 
   if (loading) {
     return (
       <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl">
-        <div className="w-4 h-4 sm:w-5 sm:h-5 bg-gray-300 rounded-full animate-pulse" />
+        <User className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
       </Button>
     )
   }
 
   if (!user) {
     return (
-      <div className="flex items-center space-x-2">
-        <Link href="/auth/signin">
-          <Button variant="ghost" size="sm" className="text-gray-600 hover:text-blue-600 font-medium">
-            Sign In
-          </Button>
-        </Link>
-        <Link href="/auth/signup">
-          <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg">
-            Sign Up
-          </Button>
-        </Link>
-      </div>
+      <Link href="/auth/signin">
+        <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl">
+          <User className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-blue-600 transition-colors" />
+        </Button>
+      </Link>
     )
   }
 
@@ -98,33 +78,29 @@ export function AccountDropdown() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl">
           <Avatar className="w-6 h-6 sm:w-8 sm:h-8">
-            <AvatarImage src={user.user_metadata?.avatar_url || "/placeholder.svg"} alt={user.email} />
-            <AvatarFallback>
-              <UserCircle className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-            </AvatarFallback>
+            <AvatarImage src={user.user_metadata?.avatar_url || "/placeholder.svg"} />
+            <AvatarFallback>{user.email?.charAt(0).toUpperCase() || "U"}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="font-normal">
+        <DropdownMenuLabel>
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">
-              {user.user_metadata?.full_name || user.email?.split("@")[0]}
-            </p>
+            <p className="text-sm font-medium leading-none">{user.user_metadata?.full_name || "User"}</p>
             <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link href="/account" className="flex items-center">
-            <User className="mr-2 h-4 w-4" />
-            <span>Account</span>
+            <Settings className="mr-2 h-4 w-4" />
+            <span>Account Overview</span>
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link href="/account/orders" className="flex items-center">
-            <ShoppingBag className="mr-2 h-4 w-4" />
-            <span>Orders</span>
+            <Package className="mr-2 h-4 w-4" />
+            <span>My Orders</span>
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
@@ -134,15 +110,21 @@ export function AccountDropdown() {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
+          <Link href="/account/addresses" className="flex items-center">
+            <MapPin className="mr-2 h-4 w-4" />
+            <span>Addresses</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
           <Link href="/account/profile" className="flex items-center">
-            <Settings className="mr-2 h-4 w-4" />
-            <span>Settings</span>
+            <CreditCard className="mr-2 h-4 w-4" />
+            <span>Profile Settings</span>
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleSignOut} className="text-red-600 focus:text-red-600">
+        <DropdownMenuItem onClick={handleSignOut} className="text-red-600">
           <LogOut className="mr-2 h-4 w-4" />
-          <span>Sign out</span>
+          <span>Sign Out</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
