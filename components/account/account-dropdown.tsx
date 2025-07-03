@@ -101,14 +101,17 @@ export function AccountDropdown() {
 
   if (!user) {
     return (
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-1 sm:space-x-2">
         <Link href="/auth/signin">
-          <Button variant="ghost" size="sm" className="text-sm font-medium">
+          <Button variant="ghost" size="sm" className="text-xs sm:text-sm font-medium px-2 sm:px-3 py-1 sm:py-2">
             Sign In
           </Button>
         </Link>
         <Link href="/auth/signup">
-          <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">
+          <Button
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-medium px-2 sm:px-3 py-1 sm:py-2"
+          >
             Sign Up
           </Button>
         </Link>
@@ -127,10 +130,12 @@ export function AccountDropdown() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-          <Avatar className="h-10 w-10">
+        <Button variant="ghost" className="relative h-8 w-8 sm:h-10 sm:w-10 rounded-full">
+          <Avatar className="h-8 w-8 sm:h-10 sm:w-10">
             <AvatarImage src={user.user_metadata?.avatar_url || "/placeholder.svg"} alt="Profile" />
-            <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold">{userInitials}</AvatarFallback>
+            <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold text-xs sm:text-sm">
+              {userInitials}
+            </AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>

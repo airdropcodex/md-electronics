@@ -1,8 +1,11 @@
 "use client"
 
+import type React from "react"
+
+import { useState, useEffect, Suspense } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Star, Search, Heart, ShoppingCart, ArrowLeft, Plus, Minus, Menu } from "lucide-react"
+import { Star, Search, Heart, ShoppingCart, ArrowLeft, Plus, Minus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -10,86 +13,104 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AccountDropdown } from "@/components/account/account-dropdown"
 import { supabase } from "@/lib/supabase"
 import { notFound } from "next/navigation"
-import { useState } from "react"
 import { useToast } from "@/hooks/use-toast"
+import { MobileMenu } from "@/components/mobile-menu"
 
-async function getProduct(slug: string) {
-  const { data: product, error } = await supabase
-    .from("products")
-    .select(`
-      *,
-      categories (name, slug),
-      brands (name, slug)
-    `)
-    .eq("slug", slug)
-    .eq("is_active", true)
-    .single()
-
-  if (error || !product) {
-    return null
-  }
-
-  return product
-}
-
-async function getRelatedProducts(categoryId: string, currentProductId: string) {
-  const { data: products, error } = await supabase
-    .from("products")
-    .select(`
-      *,
-      categories (name, slug),
-      brands (name, slug)
-    `)
-    .eq("category_id", categoryId)
-    .eq("is_active", true)
-    .neq("id", currentProductId)
-    .limit(4)
-
-  if (error) {
-    return []
-  }
-
-  return products || []
-}
-
-export default async function ProductDetailPage({
-  params,
-}: {
-  params: { slug: string }
-}) {
-  const product = await getProduct(params.slug)
-
-  if (!product) {
-    notFound()
-  }
-
-  const relatedProducts = await getRelatedProducts(product.category_id, product.id)
-
-  return (
-    <div className="min-h-screen bg-white">
-      <ProductDetailClient product={product} relatedProducts={relatedProducts} />
-    </div>
-  )
-}
-
-function ProductDetailClient({ product, relatedProducts }: { product: any; relatedProducts: any[] }) {
+function ProductDetailClient({ slug }: { slug: string }) {
+  const [product, setProduct] = useState<any>(null)
+  const [relatedProducts, setRelatedProducts] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [quantity, setQuantity] = useState(1)
   const [selectedImage, setSelectedImage] = useState(0)
   const [isWishlisted, setIsWishlisted] = useState(false)
+  const [cartCount, setCartCount] = useState(0)
+  const [wishlistCount, setWishlistCount] = useState(0)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [showMobileSearch, setShowMobileSearch] = useState(false)
   const { toast } = useToast()
 
-  const handleAddToCart = () => {
-    // Get existing cart from localStorage
-    const existingCart = JSON.parse(localStorage.getItem("cart") || "[]")
+  useEffect(() => {
+    loadProduct()
+    updateCounts()
 
-    // Check if product already exists in cart
+    // Listen for updates
+    const handleCartUpdate = () => updateCounts()
+    const handleWishlistUpdate = () => updateCounts()
+
+    window.addEventListener("cartUpdated", handleCartUpdate)
+    window.addEventListener("wishlistUpdated", handleWishlistUpdate)
+
+    return () => {
+      window.removeEventListener("cartUpdated", handleCartUpdate)
+      window.removeEventListener("wishlistUpdated", handleWishlistUpdate)
+    }
+  }, [slug])
+
+  const loadProduct = async () => {
+    try {
+      setLoading(true)
+
+      // Get product
+      const { data: productData, error: productError } = await supabase
+        .from("products")
+        .select(`
+          *,
+          categories (name, slug),
+          brands (name, slug)
+        `)
+        .eq("slug", slug)
+        .eq("is_active", true)
+        .single()
+
+      if (productError || !productData) {
+        notFound()
+        return
+      }
+
+      setProduct(productData)
+
+      // Check if product is in wishlist
+      const wishlist = JSON.parse(localStorage.getItem("wishlist") || "[]")
+      setIsWishlisted(wishlist.some((item: any) => item.id === productData.id))
+
+      // Get related products
+      const { data: relatedData } = await supabase
+        .from("products")
+        .select(`
+          *,
+          categories (name, slug),
+          brands (name, slug)
+        `)
+        .eq("category_id", productData.category_id)
+        .eq("is_active", true)
+        .neq("id", productData.id)
+        .limit(4)
+
+      setRelatedProducts(relatedData || [])
+    } catch (error) {
+      console.error("Error loading product:", error)
+      notFound()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const updateCounts = () => {
+    const cart = JSON.parse(localStorage.getItem("cart") || "[]")
+    const wishlist = JSON.parse(localStorage.getItem("wishlist") || "[]")
+    setCartCount(cart.length)
+    setWishlistCount(wishlist.length)
+  }
+
+  const handleAddToCart = () => {
+    if (!product) return
+
+    const existingCart = JSON.parse(localStorage.getItem("cart") || "[]")
     const existingItemIndex = existingCart.findIndex((item: any) => item.id === product.id)
 
     if (existingItemIndex > -1) {
-      // Update quantity if product exists
       existingCart[existingItemIndex].quantity += quantity
     } else {
-      // Add new product to cart
       existingCart.push({
         id: product.id,
         name: product.name,
@@ -100,10 +121,7 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
       })
     }
 
-    // Save to localStorage
     localStorage.setItem("cart", JSON.stringify(existingCart))
-
-    // Dispatch custom event to update cart count
     window.dispatchEvent(new Event("cartUpdated"))
 
     toast({
@@ -113,10 +131,11 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
   }
 
   const handleWishlist = () => {
+    if (!product) return
+
     const existingWishlist = JSON.parse(localStorage.getItem("wishlist") || "[]")
 
     if (isWishlisted) {
-      // Remove from wishlist
       const updatedWishlist = existingWishlist.filter((item: any) => item.id !== product.id)
       localStorage.setItem("wishlist", JSON.stringify(updatedWishlist))
       setIsWishlisted(false)
@@ -125,7 +144,6 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
         description: `${product.name} has been removed from your wishlist.`,
       })
     } else {
-      // Add to wishlist
       existingWishlist.push({
         id: product.id,
         name: product.name,
@@ -141,23 +159,61 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
       })
     }
 
-    // Dispatch custom event to update wishlist count
     window.dispatchEvent(new Event("wishlistUpdated"))
   }
 
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (searchQuery.trim()) {
+      window.location.href = `/products?search=${encodeURIComponent(searchQuery.trim())}`
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white">
+        {/* Header Skeleton */}
+        <div className="h-20 sm:h-24 lg:h-28 bg-gray-100 animate-pulse"></div>
+
+        {/* Content Skeleton */}
+        <div className="container mx-auto px-4 py-8">
+          <div className="grid lg:grid-cols-2 gap-12">
+            <div className="space-y-4">
+              <div className="aspect-square bg-gray-200 rounded-lg animate-pulse"></div>
+              <div className="grid grid-cols-4 gap-2">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="aspect-square bg-gray-200 rounded-lg animate-pulse"></div>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-6">
+              <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-6 bg-gray-200 rounded animate-pulse w-3/4"></div>
+              <div className="h-10 bg-gray-200 rounded animate-pulse w-1/2"></div>
+              <div className="h-20 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!product) {
+    return notFound()
+  }
+
   return (
-    <>
+    <div className="min-h-screen bg-white">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm">
         <div className="container mx-auto px-4 max-w-7xl">
-          <div className="flex items-center justify-between h-20 sm:h-24 lg:h-28">
-            {/* Logo and Navigation */}
-            <div className="flex items-center space-x-4 lg:space-x-8 min-w-0">
+          <div className="flex items-center justify-between h-16 sm:h-20 lg:h-24">
+            <div className="flex items-center space-x-2 lg:space-x-8 min-w-0">
               <Link href="/" className="flex items-center group flex-shrink-0">
                 <img
                   src="https://i.ibb.co/NdT015WL/Chat-GPT-Image-Jun-30-2025-09-40-05-PM-removebg-preview.png"
                   alt="MD Electronics"
-                  className="h-16 sm:h-20 lg:h-24 w-auto group-hover:scale-105 transition-transform duration-300"
+                  className="h-12 sm:h-16 lg:h-20 w-auto group-hover:scale-105 transition-transform duration-300"
                 />
               </Link>
 
@@ -185,40 +241,66 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
               </nav>
             </div>
 
-            {/* Search and Actions */}
-            <div className="flex items-center space-x-2 sm:space-x-4">
-              {/* Compact Search Bar */}
-              <div className="relative hidden md:block">
+            <div className="flex items-center space-x-1 sm:space-x-2">
+              {/* Desktop Search */}
+              <form onSubmit={handleSearch} className="relative hidden md:block">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
                   placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9 pr-3 py-2 w-48 lg:w-56 xl:w-64 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
-              </div>
+              </form>
 
-              <div className="flex items-center space-x-1 sm:space-x-2">
-                <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl">
-                  <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-red-500 transition-colors" />
+              {/* Mobile Search Toggle */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="md:hidden p-2 hover:bg-gray-100 rounded-xl"
+                onClick={() => setShowMobileSearch(!showMobileSearch)}
+              >
+                <Search className="w-4 h-4 text-gray-600" />
+              </Button>
+
+              <Button variant="ghost" size="sm" className="p-2 hover:bg-gray-100 rounded-xl relative">
+                <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-red-500 transition-colors" />
+                {wishlistCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center font-medium">
+                    {wishlistCount}
+                  </span>
+                )}
+              </Button>
+
+              <Link href="/cart">
+                <Button variant="ghost" size="sm" className="p-2 hover:bg-gray-100 rounded-xl relative">
+                  <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-blue-600 transition-colors" />
+                  <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center font-medium">
+                    {cartCount}
+                  </span>
                 </Button>
+              </Link>
 
-                <Link href="/cart">
-                  <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl relative">
-                    <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-blue-600 transition-colors" />
-                    <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center font-medium">
-                      0
-                    </span>
-                  </Button>
-                </Link>
+              <AccountDropdown />
 
-                {/* Account Dropdown */}
-                <AccountDropdown />
-
-                <Button variant="ghost" size="sm" className="lg:hidden p-2 sm:p-3 hover:bg-gray-100 rounded-xl">
-                  <Menu className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-                </Button>
-              </div>
+              <MobileMenu cartCount={cartCount} wishlistCount={wishlistCount} user={null} />
             </div>
           </div>
+
+          {/* Mobile Search Bar */}
+          {showMobileSearch && (
+            <div className="md:hidden pb-4">
+              <form onSubmit={handleSearch} className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 pr-3 py-2 w-full border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </form>
+            </div>
+          )}
         </div>
       </header>
 
@@ -238,7 +320,7 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
               {product.categories?.name}
             </Link>
             <span className="text-gray-400">/</span>
-            <span className="text-gray-900">{product.name}</span>
+            <span className="text-gray-900 line-clamp-1">{product.name}</span>
           </div>
         </div>
       </div>
@@ -249,7 +331,7 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
           <span>Back to Products</span>
         </Link>
 
-        <div className="grid lg:grid-cols-2 gap-12 mb-16">
+        <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 mb-16">
           {/* Product Images */}
           <div className="space-y-4">
             <div className="aspect-square bg-gray-50 rounded-lg overflow-hidden">
@@ -259,6 +341,7 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
                 width={500}
                 height={500}
                 className="w-full h-full object-contain"
+                priority
               />
             </div>
             {product.images.length > 1 && (
@@ -266,8 +349,8 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
                 {product.images.slice(0, 4).map((image: string, index: number) => (
                   <div
                     key={index}
-                    className={`aspect-square bg-gray-50 rounded-lg overflow-hidden cursor-pointer border-2 ${
-                      selectedImage === index ? "border-blue-500" : "border-transparent"
+                    className={`aspect-square bg-gray-50 rounded-lg overflow-hidden cursor-pointer border-2 transition-colors ${
+                      selectedImage === index ? "border-blue-500" : "border-transparent hover:border-gray-300"
                     }`}
                     onClick={() => setSelectedImage(index)}
                   >
@@ -276,7 +359,7 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
                       alt={`${product.name} ${index + 1}`}
                       width={100}
                       height={100}
-                      className="w-full h-full object-contain hover:opacity-75"
+                      className="w-full h-full object-contain"
                     />
                   </div>
                 ))}
@@ -291,20 +374,20 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
                 <Badge variant="outline">{product.brands?.name}</Badge>
                 <Badge variant="outline">{product.categories?.name}</Badge>
               </div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-4">{product.name}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4 leading-tight">{product.name}</h1>
               <div className="flex items-center space-x-4 mb-4">
                 <div className="flex items-center space-x-1">
                   {[1, 2, 3, 4, 5].map((star) => (
-                    <Star key={star} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+                    <Star key={star} className="w-4 h-4 sm:w-5 sm:h-5 fill-yellow-400 text-yellow-400" />
                   ))}
                   <span className="text-sm text-gray-600 ml-2">(4.5) 24 reviews</span>
                 </div>
               </div>
-              <div className="flex items-center space-x-4 mb-6">
-                <span className="text-3xl font-bold text-gray-900">৳{product.price.toLocaleString()}</span>
+              <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 mb-6">
+                <span className="text-2xl sm:text-3xl font-bold text-gray-900">৳{product.price.toLocaleString()}</span>
                 {product.original_price && product.original_price > product.price && (
                   <>
-                    <span className="text-xl text-gray-500 line-through">
+                    <span className="text-lg sm:text-xl text-gray-500 line-through">
                       ৳{product.original_price.toLocaleString()}
                     </span>
                     <Badge className="bg-red-100 text-red-800">
@@ -319,9 +402,9 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
               <p className="text-gray-600 leading-relaxed">{product.short_description}</p>
             </div>
 
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
               <span
-                className={`px-3 py-1 rounded-full text-sm ${
+                className={`px-3 py-1 rounded-full text-sm w-fit ${
                   product.stock_quantity > 10
                     ? "bg-green-100 text-green-800"
                     : product.stock_quantity > 0
@@ -338,8 +421,8 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
               <span className="text-sm text-gray-600">SKU: {product.sku}</span>
             </div>
 
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center border border-gray-300 rounded-lg">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
+              <div className="flex items-center border border-gray-300 rounded-lg w-fit">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -348,13 +431,13 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
                 >
                   <Minus className="w-4 h-4" />
                 </Button>
-                <span className="px-4 py-2 border-x border-gray-300">{quantity}</span>
+                <span className="px-4 py-2 border-x border-gray-300 min-w-[60px] text-center">{quantity}</span>
                 <Button variant="ghost" size="sm" className="px-3" onClick={() => setQuantity(quantity + 1)}>
                   <Plus className="w-4 h-4" />
                 </Button>
               </div>
               <Button
-                className="flex-1 bg-blue-600 hover:bg-blue-700"
+                className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 px-6 py-3"
                 disabled={product.stock_quantity === 0}
                 onClick={handleAddToCart}
               >
@@ -365,7 +448,7 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
                 variant="outline"
                 size="icon"
                 onClick={handleWishlist}
-                className={isWishlisted ? "bg-red-50 border-red-200" : ""}
+                className={`${isWishlisted ? "bg-red-50 border-red-200" : ""} p-3`}
               >
                 <Heart className={`w-4 h-4 ${isWishlisted ? "fill-red-500 text-red-500" : ""}`} />
               </Button>
@@ -410,7 +493,6 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
                 <Button variant="outline">Write a Review</Button>
               </div>
               <div className="space-y-4">
-                {/* Sample reviews */}
                 {[1, 2, 3].map((review) => (
                   <div key={review} className="border-b border-gray-200 pb-4">
                     <div className="flex items-center space-x-2 mb-2">
@@ -436,7 +518,7 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
         {relatedProducts.length > 0 && (
           <section>
             <h2 className="text-2xl font-bold text-gray-900 mb-8">Related Products</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {relatedProducts.map((relatedProduct) => (
                 <Link
                   key={relatedProduct.id}
@@ -486,7 +568,7 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
         )}
       </div>
 
-      {/* Professional Footer */}
+      {/* Footer */}
       <footer id="footer" className="bg-gray-900 text-white py-12 sm:py-16 lg:py-20">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12 mb-8 lg:mb-12">
@@ -564,6 +646,24 @@ function ProductDetailClient({ product, relatedProducts }: { product: any; relat
           </div>
         </div>
       </footer>
-    </>
+    </div>
+  )
+}
+
+export default function ProductDetailPage({
+  params,
+}: {
+  params: { slug: string }
+}) {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-white flex items-center justify-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        </div>
+      }
+    >
+      <ProductDetailClient slug={params.slug} />
+    </Suspense>
   )
 }

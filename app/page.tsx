@@ -18,7 +18,6 @@ import {
   Wind,
   WashingMachine,
   Snowflake,
-  Menu,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,6 +25,7 @@ import { Badge } from "@/components/ui/badge"
 import { AccountDropdown } from "@/components/account/account-dropdown"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
+import { MobileMenu } from "@/components/mobile-menu"
 
 async function getFeaturedProducts() {
   const { data: products, error } = await supabase
@@ -109,6 +109,7 @@ export default function HomePage() {
   const [wishlistCount, setWishlistCount] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
   const { toast } = useToast()
+  const [showMobileSearch, setShowMobileSearch] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -349,6 +350,16 @@ export default function HomePage() {
               </form>
 
               <div className="flex items-center space-x-1 sm:space-x-2">
+                {/* Mobile Search Toggle */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="md:hidden p-2 hover:bg-gray-100 rounded-xl"
+                  onClick={() => setShowMobileSearch(!showMobileSearch)}
+                >
+                  <Search className="w-4 h-4 text-gray-600" />
+                </Button>
+
                 <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl relative">
                   <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-red-500 transition-colors" />
                   {wishlistCount > 0 && (
@@ -370,14 +381,27 @@ export default function HomePage() {
                 {/* Account Dropdown */}
                 <AccountDropdown />
 
-                <Button variant="ghost" size="sm" className="lg:hidden p-2 sm:p-3 hover:bg-gray-100 rounded-xl">
-                  <Menu className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-                </Button>
+                <MobileMenu cartCount={cartCount} wishlistCount={wishlistCount} user={null} />
               </div>
             </div>
           </div>
         </div>
       </header>
+
+      {/* Mobile Search Bar */}
+      {showMobileSearch && (
+        <div className="md:hidden pb-4">
+          <form onSubmit={handleSearch} className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Input
+              placeholder="Search products..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-3 py-2 w-full border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            />
+          </form>
+        </div>
+      )}
 
       {/* Enhanced Hero Section */}
       <section className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-12 sm:py-16 lg:py-20">

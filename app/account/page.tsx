@@ -1,21 +1,57 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Search, Heart, ShoppingCart, Menu, User, Package } from "lucide-react"
+import { Search, Heart, ShoppingCart, User, Package, MapPin, CreditCard, Edit } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Label } from "@/components/ui/label"
 import { AccountDropdown } from "@/components/account/account-dropdown"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
+import { MobileMenu } from "@/components/mobile-menu"
 
 export default function AccountPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [orders, setOrders] = useState([])
-  const [wishlist, setWishlist] = useState([])
+  const [wishlistCount, setWishlistCount] = useState(0)
+  const [cartCount, setCartCount] = useState(0)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [showMobileSearch, setShowMobileSearch] = useState(false)
+  const [profile, setProfile] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+  })
+  const [addresses, setAddresses] = useState([
+    {
+      id: 1,
+      type: "Home",
+      name: "John Doe",
+      address: "123 Main Street, Apartment 4B",
+      city: "Dhaka",
+      postalCode: "1000",
+      phone: "+880 1234-567890",
+      isDefault: true,
+    },
+  ])
+  const [paymentMethods, setPaymentMethods] = useState([
+    {
+      id: 1,
+      type: "Credit Card",
+      last4: "4242",
+      brand: "Visa",
+      expiryMonth: 12,
+      expiryYear: 2025,
+      isDefault: true,
+    },
+  ])
   const { toast } = useToast()
 
   useEffect(() => {
@@ -26,17 +62,37 @@ export default function AccountPage() {
         return
       }
       setUser(session.user)
+      setProfile({
+        firstName: session.user.user_metadata?.first_name || "",
+        lastName: session.user.user_metadata?.last_name || "",
+        email: session.user.email || "",
+        phone: session.user.user_metadata?.phone || "",
+      })
       loadUserData()
     })
 
-    // Load wishlist from localStorage
-    const savedWishlist = localStorage.getItem("wishlist")
-    if (savedWishlist) {
-      setWishlist(JSON.parse(savedWishlist))
-    }
-
+    updateCounts()
     setLoading(false)
+
+    // Listen for updates
+    const handleCartUpdate = () => updateCounts()
+    const handleWishlistUpdate = () => updateCounts()
+
+    window.addEventListener("cartUpdated", handleCartUpdate)
+    window.addEventListener("wishlistUpdated", handleWishlistUpdate)
+
+    return () => {
+      window.removeEventListener("cartUpdated", handleCartUpdate)
+      window.removeEventListener("wishlistUpdated", handleWishlistUpdate)
+    }
   }, [])
+
+  const updateCounts = () => {
+    const cart = JSON.parse(localStorage.getItem("cart") || "[]")
+    const wishlist = JSON.parse(localStorage.getItem("wishlist") || "[]")
+    setCartCount(cart.length)
+    setWishlistCount(wishlist.length)
+  }
 
   const loadUserData = async () => {
     // Load user orders (mock data for now)
@@ -47,6 +103,7 @@ export default function AccountPage() {
         status: "Delivered",
         total: 45000,
         items: 2,
+        products: ["Samsung Refrigerator", "LG Washing Machine"],
       },
       {
         id: "ORD-002",
@@ -54,8 +111,31 @@ export default function AccountPage() {
         status: "Processing",
         total: 25000,
         items: 1,
+        products: ["Sony TV 55 inch"],
+      },
+      {
+        id: "ORD-003",
+        date: "2024-01-05",
+        status: "Shipped",
+        total: 15000,
+        items: 1,
+        products: ["Microwave Oven"],
       },
     ])
+  }
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (searchQuery.trim()) {
+      window.location.href = `/products?search=${encodeURIComponent(searchQuery.trim())}`
+    }
+  }
+
+  const handleProfileUpdate = () => {
+    toast({
+      title: "Profile Updated",
+      description: "Your profile information has been updated successfully.",
+    })
   }
 
   if (loading) {
@@ -71,13 +151,13 @@ export default function AccountPage() {
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm">
         <div className="container mx-auto px-4 max-w-7xl">
-          <div className="flex items-center justify-between h-20 sm:h-24 lg:h-28">
-            <div className="flex items-center space-x-4 lg:space-x-8 min-w-0">
+          <div className="flex items-center justify-between h-16 sm:h-20 lg:h-24">
+            <div className="flex items-center space-x-2 lg:space-x-8 min-w-0">
               <Link href="/" className="flex items-center group flex-shrink-0">
                 <img
                   src="https://i.ibb.co/NdT015WL/Chat-GPT-Image-Jun-30-2025-09-40-05-PM-removebg-preview.png"
                   alt="MD Electronics"
-                  className="h-16 sm:h-20 lg:h-24 w-auto group-hover:scale-105 transition-transform duration-300"
+                  className="h-12 sm:h-16 lg:h-20 w-auto group-hover:scale-105 transition-transform duration-300"
                 />
               </Link>
 
@@ -104,37 +184,66 @@ export default function AccountPage() {
               </nav>
             </div>
 
-            <div className="flex items-center space-x-2 sm:space-x-4">
-              <div className="relative hidden md:block">
+            <div className="flex items-center space-x-1 sm:space-x-2">
+              {/* Desktop Search */}
+              <form onSubmit={handleSearch} className="relative hidden md:block">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
                   placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9 pr-3 py-2 w-48 lg:w-56 xl:w-64 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
-              </div>
+              </form>
 
-              <div className="flex items-center space-x-1 sm:space-x-2">
-                <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl">
-                  <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-red-500 transition-colors" />
+              {/* Mobile Search Toggle */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="md:hidden p-2 hover:bg-gray-100 rounded-xl"
+                onClick={() => setShowMobileSearch(!showMobileSearch)}
+              >
+                <Search className="w-4 h-4 text-gray-600" />
+              </Button>
+
+              <Button variant="ghost" size="sm" className="p-2 hover:bg-gray-100 rounded-xl relative">
+                <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-red-500 transition-colors" />
+                {wishlistCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center font-medium">
+                    {wishlistCount}
+                  </span>
+                )}
+              </Button>
+
+              <Link href="/cart">
+                <Button variant="ghost" size="sm" className="p-2 hover:bg-gray-100 rounded-xl relative">
+                  <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-blue-600 transition-colors" />
+                  <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center font-medium">
+                    {cartCount}
+                  </span>
                 </Button>
+              </Link>
 
-                <Link href="/cart">
-                  <Button variant="ghost" size="sm" className="p-2 sm:p-3 hover:bg-gray-100 rounded-xl relative">
-                    <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 hover:text-blue-600 transition-colors" />
-                    <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center font-medium">
-                      0
-                    </span>
-                  </Button>
-                </Link>
+              <AccountDropdown />
 
-                <AccountDropdown />
-
-                <Button variant="ghost" size="sm" className="lg:hidden p-2 sm:p-3 hover:bg-gray-100 rounded-xl">
-                  <Menu className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-                </Button>
-              </div>
+              <MobileMenu cartCount={cartCount} wishlistCount={wishlistCount} user={user} />
             </div>
           </div>
+
+          {/* Mobile Search Bar */}
+          {showMobileSearch && (
+            <div className="md:hidden pb-4">
+              <form onSubmit={handleSearch} className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 pr-3 py-2 w-full border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </form>
+            </div>
+          )}
         </div>
       </header>
 
@@ -153,20 +262,31 @@ export default function AccountPage() {
 
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">My Account</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">My Account</h1>
           <p className="text-gray-600">Welcome back, {user.user_metadata?.full_name || user.email}!</p>
         </div>
 
         <Tabs defaultValue="overview" className="space-y-8">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="orders">Orders</TabsTrigger>
-            <TabsTrigger value="wishlist">Wishlist</TabsTrigger>
-            <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5">
+            <TabsTrigger value="overview" className="text-xs sm:text-sm">
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="orders" className="text-xs sm:text-sm">
+              Orders
+            </TabsTrigger>
+            <TabsTrigger value="addresses" className="text-xs sm:text-sm">
+              Addresses
+            </TabsTrigger>
+            <TabsTrigger value="payment" className="text-xs sm:text-sm">
+              Payment
+            </TabsTrigger>
+            <TabsTrigger value="profile" className="text-xs sm:text-sm">
+              Profile
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               <Card>
                 <CardContent className="p-6">
                   <div className="flex items-center space-x-4">
@@ -188,7 +308,7 @@ export default function AccountPage() {
                       <Heart className="w-6 h-6 text-red-600" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-gray-900">{wishlist.length}</p>
+                      <p className="text-2xl font-bold text-gray-900">{wishlistCount}</p>
                       <p className="text-gray-600">Wishlist Items</p>
                     </div>
                   </div>
@@ -217,20 +337,26 @@ export default function AccountPage() {
               <CardContent>
                 <div className="space-y-4">
                   {orders.slice(0, 3).map((order: any) => (
-                    <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div
+                      key={order.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg space-y-2 sm:space-y-0"
+                    >
                       <div>
                         <p className="font-medium">Order #{order.id}</p>
                         <p className="text-sm text-gray-600">
                           {order.date} • {order.items} items
                         </p>
+                        <p className="text-xs text-gray-500">{order.products.join(", ")}</p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-left sm:text-right">
                         <p className="font-medium">৳{order.total.toLocaleString()}</p>
                         <span
                           className={`text-xs px-2 py-1 rounded ${
                             order.status === "Delivered"
                               ? "bg-green-100 text-green-800"
-                              : "bg-yellow-100 text-yellow-800"
+                              : order.status === "Shipped"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-yellow-100 text-yellow-800"
                           }`}
                         >
                           {order.status}
@@ -251,20 +377,26 @@ export default function AccountPage() {
               <CardContent>
                 <div className="space-y-4">
                   {orders.map((order: any) => (
-                    <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div
+                      key={order.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg space-y-2 sm:space-y-0"
+                    >
                       <div>
                         <p className="font-medium">Order #{order.id}</p>
                         <p className="text-sm text-gray-600">
                           {order.date} • {order.items} items
                         </p>
+                        <p className="text-xs text-gray-500">{order.products.join(", ")}</p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-left sm:text-right">
                         <p className="font-medium">৳{order.total.toLocaleString()}</p>
                         <span
                           className={`text-xs px-2 py-1 rounded ${
                             order.status === "Delivered"
                               ? "bg-green-100 text-green-800"
-                              : "bg-yellow-100 text-yellow-800"
+                              : order.status === "Shipped"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-yellow-100 text-yellow-800"
                           }`}
                         >
                           {order.status}
@@ -277,45 +409,79 @@ export default function AccountPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="wishlist" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>My Wishlist ({wishlist.length} items)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {wishlist.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Heart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-600 mb-4">Your wishlist is empty</p>
-                    <Link href="/products">
-                      <Button className="bg-blue-600 hover:bg-blue-700">Browse Products</Button>
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {wishlist.map((item: any) => (
-                      <div key={item.id} className="border rounded-lg p-4">
-                        <img
-                          src={item.image || "/placeholder.svg?height=200&width=200"}
-                          alt={item.name}
-                          className="w-full h-40 object-contain mb-4"
-                        />
-                        <h3 className="font-medium text-gray-900 mb-2">{item.name}</h3>
-                        <p className="text-lg font-bold text-gray-900 mb-4">৳{item.price.toLocaleString()}</p>
-                        <div className="flex space-x-2">
-                          <Link href={`/products/${item.slug}`} className="flex-1">
-                            <Button variant="outline" className="w-full bg-transparent">
-                              View
-                            </Button>
-                          </Link>
-                          <Button className="flex-1 bg-blue-600 hover:bg-blue-700">Add to Cart</Button>
+          <TabsContent value="addresses" className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Shipping Addresses</h2>
+              <Button className="bg-blue-600 hover:bg-blue-700">Add New Address</Button>
+            </div>
+
+            <div className="grid gap-4">
+              {addresses.map((address) => (
+                <Card key={address.id}>
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start space-x-3">
+                        <MapPin className="w-5 h-5 text-gray-400 mt-1" />
+                        <div>
+                          <div className="flex items-center space-x-2 mb-1">
+                            <p className="font-medium">{address.type}</p>
+                            {address.isDefault && (
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Default</span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-900">{address.name}</p>
+                          <p className="text-sm text-gray-600">{address.address}</p>
+                          <p className="text-sm text-gray-600">
+                            {address.city} {address.postalCode}
+                          </p>
+                          <p className="text-sm text-gray-600">{address.phone}</p>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                      <Button variant="ghost" size="sm">
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="payment" className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Payment Methods</h2>
+              <Button className="bg-blue-600 hover:bg-blue-700">Add Payment Method</Button>
+            </div>
+
+            <div className="grid gap-4">
+              {paymentMethods.map((method) => (
+                <Card key={method.id}>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <CreditCard className="w-5 h-5 text-gray-400" />
+                        <div>
+                          <div className="flex items-center space-x-2 mb-1">
+                            <p className="font-medium">
+                              {method.brand} ending in {method.last4}
+                            </p>
+                            {method.isDefault && (
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Default</span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600">
+                            Expires {method.expiryMonth}/{method.expiryYear}
+                          </p>
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="sm">
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </TabsContent>
 
           <TabsContent value="profile" className="space-y-6">
@@ -324,25 +490,40 @@ export default function AccountPage() {
                 <CardTitle>Profile Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-                    <Input value={user.user_metadata?.first_name || ""} />
+                    <Label htmlFor="firstName">First Name</Label>
+                    <Input
+                      id="firstName"
+                      value={profile.firstName}
+                      onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-                    <Input value={user.user_metadata?.last_name || ""} />
+                    <Label htmlFor="lastName">Last Name</Label>
+                    <Input
+                      id="lastName"
+                      value={profile.lastName}
+                      onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
+                    />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <Input value={user.email} disabled />
+                  <Label htmlFor="email">Email</Label>
+                  <Input id="email" value={profile.email} disabled />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                  <Input placeholder="Enter your phone number" />
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input
+                    id="phone"
+                    value={profile.phone}
+                    onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                    placeholder="Enter your phone number"
+                  />
                 </div>
-                <Button className="bg-blue-600 hover:bg-blue-700">Update Profile</Button>
+                <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleProfileUpdate}>
+                  Update Profile
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
