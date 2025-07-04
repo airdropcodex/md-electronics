@@ -1,6 +1,5 @@
-"use client"
-
-import { useState, useEffect } from "react"
+import { cookies } from "next/headers"
+import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 import Link from "next/link"
 import { Search, Menu, Package, Users, TrendingUp, DollarSign, Eye, Edit, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -10,100 +9,64 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { AccountDropdown } from "@/components/account/account-dropdown"
-import { supabase } from "@/lib/supabase"
-import { useToast } from "@/hooks/use-toast"
+import { redirect } from "next/navigation"
 
-export default function AdminPage() {
-  const [user, setUser] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState({
-    totalProducts: 0,
-    totalOrders: 0,
-    totalUsers: 0,
-    totalRevenue: 0,
-  })
-  const [products, setProducts] = useState([])
-  const [orders, setOrders] = useState([])
-  const { toast } = useToast()
-
-  useEffect(() => {
-    // Check authentication and admin access
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        window.location.href = "/auth/signin"
-        return
-      }
-
-      // Check if user is admin (you can implement your own admin check logic)
-      const isAdmin = session.user.email === "admin@mdelectronics.com" || session.user.user_metadata?.role === "admin"
-
-      if (!isAdmin) {
-        toast({
-          title: "Access Denied",
-          description: "You don't have permission to access this page.",
-          variant: "destructive",
-        })
-        window.location.href = "/"
-        return
-      }
-
-      setUser(session.user)
-      loadAdminData()
-    })
-
-    setLoading(false)
-  }, [])
-
-  const loadAdminData = async () => {
-    try {
-      // Load products
-      const { data: productsData } = await supabase
-        .from("products")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(10)
-
-      setProducts(productsData || [])
-
-      // Mock stats (you can implement real queries)
-      setStats({
-        totalProducts: productsData?.length || 0,
-        totalOrders: 25,
-        totalUsers: 150,
-        totalRevenue: 2500000,
-      })
-
-      // Mock orders data
-      setOrders([
-        {
-          id: "ORD-001",
-          customer: "John Doe",
-          email: "john@example.com",
-          total: 45000,
-          status: "Processing",
-          date: "2024-01-15",
-        },
-        {
-          id: "ORD-002",
-          customer: "Jane Smith",
-          email: "jane@example.com",
-          total: 25000,
-          status: "Delivered",
-          date: "2024-01-14",
-        },
-      ])
-    } catch (error) {
-      console.error("Error loading admin data:", error)
-    }
+export default async function AdminPage() {
+  const cookieStore = cookies()
+  const supabase = createServerComponentClient({ cookies: () => cookieStore })
+  
+  // Check authentication and admin access
+  const { data: { session } } = await supabase.auth.getSession()
+  
+  if (!session) {
+    redirect("/auth/signin")
   }
 
-  if (loading) {
-    return <div className="min-h-screen bg-white flex items-center justify-center">Loading...</div>
+  // Check if user is admin - now using Supabase RLS policies
+  const { data: userData } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', session.user.id)
+    .single()
+
+  if (!userData?.is_admin) {
+    redirect("/")
   }
 
-  if (!user) {
-    return null
+  // Load admin data
+  const { data: products } = await supabase
+    .from("products")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(10)
+
+  // Mock stats (replace with real queries)
+  const stats = {
+    totalProducts: products?.length || 0,
+    totalOrders: 25,
+    totalUsers: 150,
+    totalRevenue: 2500000,
   }
+
+  // Mock orders data
+  const orders = [
+    {
+      id: "ORD-001",
+      customer: "John Doe",
+      email: "john@example.com",
+      total: 45000,
+      status: "Processing",
+      date: "2024-01-15",
+    },
+    {
+      id: "ORD-002",
+      customer: "Jane Smith",
+      email: "jane@example.com",
+      total: 25000,
+      status: "Delivered",
+      date: "2024-01-14",
+    },
+  ]
 
   return (
     <div className="min-h-screen bg-gray-50">
